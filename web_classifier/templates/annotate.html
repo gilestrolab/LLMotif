@@ -1,0 +1,317 @@
+<!-- templates/annotate.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Annotation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+    <style>
+        .annotate-container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 500px;
+        }
+        #selection-grid {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #333;
+            position: relative;
+            margin: 20px 0;
+            background-color: #f8f9fa;
+            cursor: crosshair;
+        }
+        .grid-label {
+            position: absolute;
+            font-size: 12px;
+            color: #666;
+        }
+        .x-label {
+            bottom: -25px;
+        }
+        .y-label {
+            transform: rotate(-90deg);
+            transform-origin: left top;
+            left: -25px;
+        }
+        .marker {
+            width: 12px;
+            height: 12px;
+            background-color: red;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+        }
+        .grid-line {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        .vertical-line {
+            width: 1px;
+            height: 100%;
+        }
+        .horizontal-line {
+            width: 100%;
+            height: 1px;
+        }
+        .axis-label {
+            position: absolute;
+            font-size: 10px;
+            color: #666;
+        }
+        .auto-submit-control {
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+        .folder-info {
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row my-3">
+            <div class="col-md-8">
+                <h1>
+                    Image Annotation
+                    <span class="folder-info">Folder: <strong>{{ folder }}</strong></span>
+                    <a href="{{ url_for('change_folder') }}" class="btn btn-sm btn-outline-secondary">Change Folder</a>
+                </h1>
+            </div>
+            <div class="col-md-4 text-end">
+                <span>Logged in as: <strong>{{ session['username'] }}</strong></span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary ms-2">Logout</a>
+            </div>
+        </div>
+
+        <div class="progress mb-3">
+            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%;" 
+                aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
+                {{ annotated }}/{{ total }} ({{ progress|round(1) }}%)
+            </div>
+        </div>
+
+        <div class="image-container">
+            <h4>{{ image }}</h4>
+            <img src="{{ image_url }}" alt="{{ image }}">
+        </div>
+
+        <div class="annotate-container">
+            <form method="post" action="{{ url_for('submit') }}" id="annotationForm">
+                <input type="hidden" name="filename" value="{{ image }}">
+                <input type="hidden" id="courtship_score" name="courtship_score" value="0.5">
+                <input type="hidden" id="confidence_score" name="confidence_score" value="0.5">
+                
+                <div class="mt-4">
+                    <h5>Select Courtship Likelihood & Confidence</h5>
+                    <div class="mb-2">Click on the grid below to select both values at once:</div>
+                    
+                    <div class="auto-submit-control form-check">
+                        <input class="form-check-input" type="checkbox" id="autoSubmitCheckbox" checked>
+                        <label class="form-check-label" for="autoSubmitCheckbox">
+                            Auto-submit after selection
+                        </label>
+                    </div>
+                    
+                    <div style="position: relative;">
+                        <div class="grid-label y-label" style="top: 200px;">Confidence →</div>
+                        <div class="grid-label x-label" style="left: 200px;">Courtship Likelihood →</div>
+                        
+                        <div id="selection-grid">
+                            <!-- Grid lines will be added via JavaScript -->
+                            <!-- Selection marker will be added via JavaScript -->
+                        </div>
+                        
+                        <div class="d-flex justify-content-between px-2">
+                            <span>0.0</span>
+                            <span>0.5</span>
+                            <span>1.0</span>
+                        </div>
+                        
+                        <div style="position: relative; height: 20px;">
+                            <span style="position: absolute; left: -10px; top: -30px;">0.0</span>
+                            <span style="position: absolute; left: -10px; top: -230px;">0.5</span>
+                            <span style="position: absolute; left: -10px; top: -430px;">1.0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-3">
+                        <div>
+                            <strong>Selected Values:</strong> 
+                            Courtship: <span id="courtship_display">0.50</span>, 
+                            Confidence: <span id="confidence_display">0.50</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submitButton">Submit</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('selection-grid');
+        const courtshipInput = document.getElementById('courtship_score');
+        const confidenceInput = document.getElementById('confidence_score');
+        const courtshipDisplay = document.getElementById('courtship_display');
+        const confidenceDisplay = document.getElementById('confidence_display');
+        const autoSubmitCheckbox = document.getElementById('autoSubmitCheckbox');
+        const annotationForm = document.getElementById('annotationForm');
+        let marker = null;
+        let userHasInteracted = false;  // Track if the user has interacted with the grid
+        
+        // Load previous auto-submit state or default to true
+        function loadAutoSubmitState() {
+            const savedState = localStorage.getItem('autoSubmitEnabled');
+            if (savedState !== null) {
+                autoSubmitCheckbox.checked = savedState === 'true';
+            } else {
+                // Default is true (checked)
+                autoSubmitCheckbox.checked = true;
+            }
+        }
+        
+        // Save auto-submit state when it changes
+        autoSubmitCheckbox.addEventListener('change', function() {
+            localStorage.setItem('autoSubmitEnabled', this.checked);
+        });
+        
+        // Create grid lines
+        function createGridLines() {
+            // Create 10 vertical lines
+            for (let i = 1; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'grid-line vertical-line';
+                line.style.left = `${i * 10}%`;
+                grid.appendChild(line);
+                
+                // Add label for 0.5 point
+                if (i === 5) {
+                    const label = document.createElement('div');
+                    label.className = 'axis-label';
+                    label.style.bottom = '-20px';
+                    label.style.left = `${i * 10}%`;
+                    label.style.transform = 'translateX(-50%)';
+                    label.textContent = '0.5';
+                    grid.appendChild(label);
+                }
+            }
+            
+            // Create 10 horizontal lines
+            for (let i = 1; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'grid-line horizontal-line';
+                line.style.top = `${i * 10}%`;
+                grid.appendChild(line);
+                
+                // Add label for 0.5 point
+                if (i === 5) {
+                    const label = document.createElement('div');
+                    label.className = 'axis-label';
+                    label.style.top = `${i * 10}%`;
+                    label.style.left = '-20px';
+                    label.style.transform = 'translateY(-50%)';
+                    label.textContent = '0.5';
+                    grid.appendChild(label);
+                }
+            }
+        }
+        
+        // Create and position the marker
+        function placeMarker(x, y, isUserInteraction = false) {
+            // Remove existing marker if there is one
+            if (marker) {
+                marker.parentNode.removeChild(marker);
+            }
+            
+            // Create marker
+            marker = document.createElement('div');
+            marker.className = 'marker';
+            marker.style.left = `${x}px`;
+            marker.style.top = `${y}px`;
+            grid.appendChild(marker);
+            
+            // Calculate values (0-1 range)
+            const courtshipValue = x / grid.offsetWidth;
+            const confidenceValue = 1 - (y / grid.offsetHeight); // Invert Y axis
+            
+            // Clamp values between 0 and 1
+            const clampedCourtship = Math.max(0, Math.min(1, courtshipValue));
+            const clampedConfidence = Math.max(0, Math.min(1, confidenceValue));
+            
+            // Update form values
+            courtshipInput.value = clampedCourtship.toFixed(2);
+            confidenceInput.value = clampedConfidence.toFixed(2);
+            courtshipDisplay.textContent = clampedCourtship.toFixed(2);
+            confidenceDisplay.textContent = clampedConfidence.toFixed(2);
+            
+            // Only auto-submit if this was triggered by a user interaction and checkbox is checked
+            if (isUserInteraction && autoSubmitCheckbox.checked) {
+                // Small delay to allow the visual update before submission
+                setTimeout(() => {
+                    annotationForm.submit();
+                }, 100);
+            }
+        }
+        
+        // Handle click on the grid
+        grid.addEventListener('click', function(e) {
+            userHasInteracted = true;  // Mark that user has interacted
+            const rect = grid.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            placeMarker(x, y, true);  // Pass true for user interaction
+        });
+        
+        // Also handle mousemove with pressed mouse button
+        let isMouseDown = false;
+        grid.addEventListener('mousedown', function(e) {
+            userHasInteracted = true;  // Mark that user has interacted
+            isMouseDown = true;
+            const rect = grid.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            placeMarker(x, y, true);  // Pass true for user interaction
+        });
+        
+        grid.addEventListener('mousemove', function(e) {
+            if (isMouseDown) {
+                userHasInteracted = true;  // Mark that user has interacted
+                const rect = grid.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                placeMarker(x, y, true);  // Pass true for user interaction
+            }
+        });
+        
+        window.addEventListener('mouseup', function() {
+            isMouseDown = false;
+        });
+        
+        // Initialize
+        window.addEventListener('load', function() {
+            // Load saved auto-submit state
+            loadAutoSubmitState();
+            
+            // Create grid
+            createGridLines();
+            
+            // Place initial marker in the middle (not a user interaction)
+            setTimeout(() => {
+                const centerX = grid.offsetWidth / 2;
+                const centerY = grid.offsetHeight / 2;
+                placeMarker(centerX, centerY, false);  // Pass false for initial placement
+            }, 100);
+        });
+    </script>
+</body>
+</html>

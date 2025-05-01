@@ -1,0 +1,13 @@
+# docker-compose.yml
+---
+services:
+  image-annotator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8085:5000"
+    volumes:
+      - /home/gg/ownCloud/Work/Projects/coding/LLM_behavioral/output:/app/images
+      - ./data/:/app/data/
+    user: "1000:1000"  # Run as UID 1000, GID 1000

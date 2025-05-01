@@ -1,0 +1,23 @@
+<!-- templates/no_folders.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>No Folders Available</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container text-center mt-5">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <h1>No Image Folders Available</h1>
+                <p class="lead">There are no folders with images available for annotation.</p>
+                <p>Please check that images are located in the correct path:</p>
+                <pre class="bg-light p-3 text-start">/home/gg/ownCloud/Work/Projects/coding/LLM_behavioral/output/&lt;folder&gt;/roi</pre>
+                <p>
+                    <a href="{{ url_for('logout') }}" class="btn btn-primary">Logout</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -9,6 +9,10 @@ from pathlib import Path
 from tqdm import tqdm  # For progress indication
 import glob
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 def process_image(client, image_path, output_path, question, provider_name, provider_model, timeout, overwrite=False):
     """Process a single image with the AI model and save results to a JSON file."""
     # Check if output file exists and handle accordingly
@@ -174,12 +178,12 @@ def main():
     providers = {
         'openrouter': {
             'base_url': 'https://openrouter.ai/api/v1',
-            'api_key': '<REDACTED>',
+            'api_key': os.getenv('OPENROUTER_API_KEY'),
             'model': 'meta-llama/llama-3.2-90b-vision-instruct'
         },
         'ollama': {
             'base_url': 'http://ollama.vpn.gilest.ro/v1/',
-            'api_key': 'ollama',
+            'api_key': os.getenv('OLLAMA_API_KEY', 'ollama'),  # Fallback to 'ollama' if not set in .env
             'model': 'llama3.2'
         },
     }
